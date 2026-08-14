@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>보안 IP 수집 대시보드</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; font-family: -apple-system, sans-serif; }
+    body { background-color: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
+    .container { max-width: 1000px; margin: 0 auto; filter: blur(5px); transition: filter 0.3s; }
+    .container.unlocked { filter: blur(0); }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #334155; padding-bottom: 10px; }
+    h1 { color: #38bdf8; font-size: 1.4rem; margin: 0; }
+    .table-container { background: #1e293b; border-radius: 8px; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; text-align: left; }
+    th, td { padding: 12px 16px; border-bottom: 1px solid #334155; }
+    th { background: #0f172a; color: #94a3b8; }
+    .ip { color: #4ade80; font-weight: bold; font-family: monospace; }
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.85); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+    .modal-card { background: #1e293b; border: 1px solid #334155; padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; text-align: center; }
+    .input-field { width: 100%; padding: 12px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff; font-size: 1rem; text-align: center; margin: 15px 0; }
+    .submit-btn { width: 100%; padding: 12px; border-radius: 6px; border: none; background: #2563eb; color: #fff; font-size: 1rem; font-weight: bold; cursor: pointer; }
+    .error-msg { color: #f87171; font-size: 0.85rem; margin-top: 10px; display: none; }
+  </style>
+</head>
+<body>
+
+  <div id="main-container" class="container">
+    <header>
+      <h1>🔒 보안 IP 접속 기록 대시보드</h1>
+      <div id="status-badge" style="color: #94a3b8;">인증 대기 중...</div>
+    </header>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>공인 IP</th>
+            <th>통신사 (ISP)</th>
+            <th>국가 / 지역</th>
+            <th>우편번호</th>
+            <th>지도 위치</th>
+            <th>접속 일시</th>
+          </tr>
+        </thead>
+        <tbody id="log-table-body">
+          <tr><td colspan="7" style="text-align:center; padding: 30px;">인증 완료 후 데이터가 표시됩니다.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="auth-modal" class="modal-overlay">
+    <div class="modal-card">
+      <h2 style="color: #38bdf8; margin: 0;">🔑 라이센스 인증</h2>
+      <p style="color: #94a3b8; font-size: 0.9rem;">등록하신 라이센스 번호를 입력해주세요.</p>
+      
+      <input type="text" id="license-input" class="input-field" placeholder="라이센스 번호 입력" />
+      <button id="verify-btn" class="submit-btn" onclick="verifyLicense()">확인 및 로그 보기</button>
+      <div id="error-message" class="error-msg"></div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
+    const SUPABASE_ANON_KEY = 'YOUR-SUPABASE-ANON-KEY';
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const linkCode = urlParams.get('code');
+    const token = urlParams.get('token');
+
+    async function verifyLicense() {
+      const licenseInput = document.getElementById('license-input').value.trim();
+      const errorMsg = document.getElementById('error-message');
+
+      if (!licenseInput || !linkCode || !token) {
+        errorMsg.innerText = '필수 정보가 누락되었습니다.';
+        errorMsg.style.display = 'block';
+        return;
+      }
+
+      const { data: logs, error } = await supabase.rpc('get_ip_logs_secure', {
+        p_code: linkCode,
+        p_token: token,
+        p_license_key: licenseInput
+      });
+
+      if (error) {
+        errorMsg.innerText = '라이센스가 일치하지 않거나 접속 토큰이 만료되었습니다.';
+        errorMsg.style.display = 'block';
+        return;
+      }
+
+      document.getElementById('auth-modal').style.display = 'none';
+      document.getElementById('main-container').classList.add('unlocked');
+      document.getElementById('status-badge').innerText = `코드: ${linkCode} (인증 완료)`;
+      document.getElementById('status-badge').style.color = '#4ade80';
+
+      const tableBody = document.getElementById('log-table-body');
+      if (!logs || logs.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 30px;">수집된 IP 로그가 없습니다.</td></tr>`;
+        return;
+      }
+
+      tableBody.innerHTML = logs.map((log, i) => `
+        <tr>
+          <td>${logs.length - i}</td>
+          <td><span class="ip">${log.ip_address}</span></td>
+          <td>${log.isp || '알 수 없음'}</td>
+          <td>${log.country || ''} ${log.region || ''}</td>
+          <td>${log.zip_code || '-'}</td>
+          <td>${log.latitude ? `<a href="https://maps.google.com/?q=${log.latitude},${log.longitude}" target="_blank" style="color:#60a5fa;">지도 보기</a>` : '-'}</td>
+          <td>${new Date(log.accessed_at).toLocaleString('ko-KR')}</td>
+        </tr>
+      `).join('');
+    }
+  </script>
+</body>
+</html>

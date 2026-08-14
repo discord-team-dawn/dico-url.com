@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>외부 사이트 이동 안내</title>
+  <style>
+    body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #0f172a; color: #fff; margin: 0; }
+    .card { background: #1e293b; padding: 30px; border-radius: 12px; text-align: center; max-width: 400px; border: 1px solid #334155; }
+    .btn { display: inline-block; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 15px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>🔗 외부 사이트 이동</h2>
+    <p>보안 및 안전성 검사를 거쳐 해당 사이트로 이동합니다.</p>
+    <a id="redirect-btn" href="#" class="btn">목적지로 이동하기</a>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('c');
+    // 본인의 Supabase Edge Function URL로 설정
+    const EDGE_URL = "https://YOUR-PROJECT.supabase.co/functions/v1/redirect";
+
+    if (code) {
+      document.getElementById('redirect-btn').href = `${EDGE_URL}?code=${code}`;
+    } else {
+      alert('잘못된 접근 경로입니다.');
+    }
+  </script>
+</body>
+</html>
